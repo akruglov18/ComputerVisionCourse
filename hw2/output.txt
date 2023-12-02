@@ -1,0 +1,80 @@
+Case 1:
+
+Tensor:
+1 2 3 4 
+5 6 7 8 
+9 10 11 12 
+im2Col with 2x3 kernel:
+1 2 5 6 
+2 3 6 7 
+3 4 7 8 
+5 6 9 10 
+6 7 10 11 
+7 8 11 12 
+im2Col with 3x2 kernel:
+1 2 3 
+2 3 4 
+5 6 7 
+6 7 8 
+9 10 11 
+10 11 12 
+im2Col with 3x3 kernel:
+1 2 
+2 3 
+3 4 
+5 6 
+6 7 
+7 8 
+9 10 
+10 11 
+11 12 
+
+
+Case 2:
+
+Conv Layer with 2x2x2 filters:
+channel: 0
+37 47 
+67 77 
+channel: 1
+23 33 
+53 63 
+
+
+Case 3:
+
+Conv Layer with 2x2x3 filters:
+channel: 0
+106 127 
+190 211 
+channel: 1
+62 83 
+146 167 
+
+
+Case 4:
+
+Conv Layer with 2x3x3 filters:
+channel: 0
+348 393 
+528 573 
+channel: 1
+192 237 
+372 417 
+
+
+Case 5:
+
+Conv Layer with 3x2x2 filters:
+channel: 0
+44 54 64 
+84 94 104 
+124 134 144 
+channel: 1
+26 36 46 
+66 76 86 
+106 116 126 
+channel: 2
+52 69 86 
+120 137 154 
+188 205 222 
