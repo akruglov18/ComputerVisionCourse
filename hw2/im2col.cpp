@@ -126,7 +126,7 @@ void printTensor2D(const Tensor2D& tensor) {
 }
 
 int main() {
-    freopen("output.txt", "w", stdout);
+    // freopen("output.txt", "w", stdout);
     cout << "Case 1:\n\n";
     {
         Tensor2D img = {{1, 2, 3, 4},
