@@ -19,33 +19,23 @@ Tensor2D multiply(const Tensor2D& a, const Tensor2D& b) {
     return res;
 }
 
-// конвертация ядра сверки в вектор
-// необохдимо для свёрочного слоя с im2col
-vector<int> convertKernel2Vec(const Tensor2D& kernel) {
-    vector<int> res;
-    res.reserve(kernel.size() * kernel[0].size());
-    for (size_t i = 0; i < kernel.size(); i++) {
-        for (size_t j = 0; j < kernel[0].size(); j++) {
-            res.push_back(kernel[i][j]);
-        }
-    }
-    return res;
-}
-
-// input - двумерное изображение
+// input - двумерное изображение, HxWxC - размерности
 // blockX, blockY - размеры фильтра
-Tensor2D im2col(const Tensor2D& input, size_t blockX, size_t blockY) {
+Tensor2D im2col(const Tensor3D& input, size_t blockX, size_t blockY) {
     size_t ix = input.size();
     size_t iy = input[0].size();
+    size_t ic = input[0][0].size();
     size_t rx = ix + 1 - blockX;
     size_t ry = iy + 1 - blockY;
-    Tensor2D result(blockX * blockY, vector<int>(rx * ry));
+    Tensor2D result(blockX * blockY * ic, vector<int>(rx * ry));
     size_t cnt = 0;
     for (size_t x = 0; x + blockX <= input.size(); x++) {
         for (size_t y = 0; y + blockY <= input[0].size(); y++) {
-            for (size_t i = 0; i < blockX; i++) {
-                for (size_t j = 0; j < blockY; j++) {
-                    result[i * blockY + j][cnt] = input[x + i][y + j];
+            for (size_t c = 0; c < ic; c++) {
+                for (size_t i = 0; i < blockX; i++) {
+                    for (size_t j = 0; j < blockY; j++) {
+                        result[c * blockX * blockY + i * blockY + j][cnt] = input[x + i][y + j][c];
+                    }
                 }
             }
             cnt++;
@@ -77,20 +67,23 @@ Tensor3D col2im(const Tensor2D& input, size_t imgX, size_t imgY, size_t kx, size
     return result;
 }
 
-// input - двумерное изображение
+// input - двумерное изображение, HxWxC - размерности
 // kernels - фильтры, первая размерность - количество фильтров,
 //                    вторая, третья - размеры фильтров
-Tensor3D im2colConvLayer(const Tensor2D& input, const Tensor3D& kernels) {
-    size_t kc = kernels.size();
+Tensor3D im2colConvLayer(const Tensor3D& input, const Tensor3D& kernels) {
+    size_t kn = kernels.size();
     size_t kx = kernels[0].size();
     size_t ky = kernels[0][0].size();
+    size_t ic = input[0][0].size();
     auto img = im2col(input, kx, ky);
-    Tensor2D convertedKernels(kc);
-    for (size_t c = 0; c < kc; c++) {
-        convertedKernels[c].reserve(kx * ky);
-        for (size_t x = 0; x < kx; x++) {
-            for (size_t y = 0; y < ky; y++) {
-                convertedKernels[c].push_back(kernels[c][x][y]);
+    Tensor2D convertedKernels(kn);
+    for (size_t n = 0; n < kn; n++) {
+        convertedKernels[n].reserve(kx * ky * ic);
+        for (size_t c = 0; c < ic; c++) {
+            for (size_t x = 0; x < kx; x++) {
+                for (size_t y = 0; y < ky; y++) {
+                    convertedKernels[n].push_back(kernels[n][x][y]);
+                }
             }
         }
     }
@@ -100,7 +93,7 @@ Tensor3D im2colConvLayer(const Tensor2D& input, const Tensor3D& kernels) {
 }
 
 // референсная конволюция тензора с одним фильтром
-Tensor2D referenceConvLayer(const Tensor2D& input, const Tensor2D& kernel) {
+Tensor2D referenceConvLayer(const Tensor3D& input, const Tensor2D& kernel) {
     size_t kx = kernel.size();
     size_t ky = kernel[0].size();
     Tensor2D res(input.size() - kx + 1, vector<int>(input[0].size() - ky + 1));
@@ -108,7 +101,9 @@ Tensor2D referenceConvLayer(const Tensor2D& input, const Tensor2D& kernel) {
         for (size_t y = 0; y + ky <= input[0].size(); y++) {
             for (size_t i = 0; i < kx; i++) {
                 for (size_t j = 0; j < ky; j++) {
-                    res[x][y] += kernel[i][j] * input[x + i][y + j];
+                    for (size_t c = 0; c < input[0][0].size(); c++) {
+                        res[x][y] += kernel[i][j] * input[x + i][y + j][c];
+                    }
                 }
             }
         }
@@ -116,9 +111,20 @@ Tensor2D referenceConvLayer(const Tensor2D& input, const Tensor2D& kernel) {
     return res;
 }
 
+void printTensor3D(const Tensor3D& tensor) {
+    for (size_t i = 0; i < tensor.size(); i++) {
+        for (size_t j = 0; j < tensor[0].size(); j++) {
+            for (size_t c; c < tensor[0][0].size(); c++) {
+                cout << tensor[i][j][c] << " ";
+            }
+        }
+        cout << "\n";
+    }
+}
+
 void printTensor2D(const Tensor2D& tensor) {
-    for (int i = 0; i < tensor.size(); i++) {
-        for (int j = 0; j < tensor[0].size(); j++) {
+    for (size_t i = 0; i < tensor.size(); i++) {
+        for (size_t j = 0; j < tensor[0].size(); j++) {
             cout << tensor[i][j] << " ";
         }
         cout << "\n";
@@ -129,11 +135,12 @@ int main() {
     // freopen("output.txt", "w", stdout);
     cout << "Case 1:\n\n";
     {
-        Tensor2D img = {{1, 2, 3, 4},
-                        {5, 6, 7, 8},
-                        {9, 10, 11, 12}};
+        // HxWxC : 3x4x2
+        Tensor3D img = {{{1, 13}, {2, 14}, {3, 15}, {4, 16}},
+                        {{5, 17}, {6, 18}, {7, 19}, {8, 20}},
+                        {{9, 21}, {10, 22}, {11, 23}, {12, 24}}};
         cout << "Tensor:\n";
-        printTensor2D(img);
+        printTensor3D(img);
 
         cout << "im2Col with 2x3 kernel:\n";
         printTensor2D(im2col(img, 2, 3));
@@ -145,9 +152,10 @@ int main() {
 
     cout << "\n\nCase 2:\n\n";
     {
-        Tensor2D img = {{1, 2, 3},
-                        {4, 5, 6},
-                        {7, 8, 9}};
+        // HxWxC : 3x3x3
+        Tensor3D img = {{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}},
+                        {{10, 11, 12}, {13, 14, 15}, {16, 17, 18}},
+                        {{19, 20, 21}, {22, 23, 24}, {25, 26, 27}}};
         Tensor3D kernels = {{{1, 2},
                              {3, 4}},
                             {{4, 3},
@@ -168,9 +176,10 @@ int main() {
 
     cout << "\n\nCase 3:\n\n";
     {
-        Tensor2D img = {{1, 2, 3, 4},
-                        {5, 6, 7, 8},
-                        {9, 10, 11, 12}};
+        // HxWxC : 3x4x3
+        Tensor3D img = {{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}, {10, 11, 12}},
+                        {{13, 14, 15}, {16, 17, 18}, {19, 20, 21}, {22, 23, 24}},
+                        {{25, 26, 27}, {28, 29, 30}, {31, 32, 33}, {34, 35, 36}}};
         Tensor3D kernels = {{{1, 2, 3},
                              {4, 5, 6}},
                             {{6, 5, 4},
@@ -191,10 +200,11 @@ int main() {
 
     cout << "\n\nCase 4:\n\n";
     {
-        Tensor2D img = {{1, 2, 3, 4},
-                        {5, 6, 7, 8},
-                        {9, 10, 11, 12},
-                        {13, 14, 15, 16}};
+        // HxWxC : 4x4x1
+        Tensor3D img = {{{1}, {2}, {3}, {4}},
+                        {{5}, {6}, {7}, {8}},
+                        {{9}, {10}, {11}, {12}},
+                        {{13}, {14}, {15}, {16}}};
         Tensor3D kernels = {{{1, 2, 3},
                              {4, 5, 6},
                              {7, 8, 9}},
@@ -217,10 +227,10 @@ int main() {
 
     cout << "\n\nCase 5:\n\n";
     {
-        Tensor2D img = {{1, 2, 3, 4},
-                        {5, 6, 7, 8},
-                        {9, 10, 11, 12},
-                        {13, 14, 15, 16}};
+        // HxWxC : 3x4x3
+        Tensor3D img = {{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}, {10, 11, 12}},
+                        {{13, 14, 15}, {16, 17, 18}, {19, 20, 21}, {22, 23, 24}},
+                        {{25, 26, 27}, {28, 29, 30}, {31, 32, 33}, {34, 35, 36}}};
         Tensor3D kernels = {{{1, 2},
                              {3, 4}},
                             {{4, 3},
